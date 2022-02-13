@@ -1,0 +1,217 @@
+Automated ELK Stack Deployment
+The files in this repository were used to configure the network depicted below.
+
+ELK Network Diagram
+
+These files have been tested and used to generate a live ELK deployment on Azure. They can be used to either recreate the entire deployment pictured above. Alternatively, select portions of the playbook file may be used to install only certain pieces of it, such as Filebeat.
+
+This document contains the following details:
+
+Description of the Topology
+Access Policies
+ELK Configuration
+Beats in Use
+Machines Being Monitored
+How to Use the Ansible Build
+Description of the Topology
+The main purpose of this network is to expose a load-balanced and monitored instance of DVWA, the D*mn Vulnerable Web Application.
+
+Load balancing ensures that the application will be highly available, in addition to restricting inbound access to the network.
+
+Integrating an ELK server allows users to easily monitor the vulnerable VMs for changes to the file systems of virtual machines on the network, as well as system logs.
+
+The configuration details of each machine may be found below.
+Name	Function	IP Address	Operating System
+Jump-Box-Provisioner	Gateway	10.0.0.5	Ubuntu-Server 18.04LTS
+Elk-Server	Configuration VM	10.3.0.4	Linux
+Web-1	DVWA Container	10.0.0.6	Linux
+Web-2	DVWA Container	10.0.0.7	Linux
+Access Policies
+The machines on the internal network are not exposed to the public Internet.
+
+Only the Jump-Box-Provisioner server can accept connections from the Internet. Access to this machine is only allowed from the following IP address:
+
+72.94.81.86 - local machine
+Machines within the network can only be accessed by DVWA containers setup within the Jump-Box-Provisioner.
+
+A summary of the access policies in place can be found in the table below.
+Name	Publicly Accessible	Allowed IP Address
+Jump-Box-Provisioner	Yes	10.0.0.5, 72.94.81.86
+Elk-Server	No	10.0.0.5, 72.94.81.86
+Web-1	No	10.0.0.5
+Web-2	No	10.0.0.5
+Elk Configuration
+Ansible was used to automate configuration of the ELK machine. No configuration was performed manually, which is advantageous because automation provided efficiency, and less chance of a mess up.
+
+The ELK VM exposes an Elastic Stack instance. Docker is used to download and manage an ELK container.
+
+To use this playbook, one must log into the Jump Box, then issue: ansible-playbook install_elk.yml elk. This runs the install_elk.yml playbook on the elk host.
+Playbook for Docker/DVWA Installation on Web Servers:
+---
+ - name: My first playbook
+   hosts: webservers
+   become: true
+   tasks:
+   - name: Install docker
+     apt:
+       force_apt_get: yes
+       update_cache: yes
+       name: docker.io
+       state: present
+   - name: Install python3-pip
+     apt:
+       force_apt_get: yes
+       name: python3-pip
+       state: present
+   - name: Install docker python package
+     pip:
+       name: docker
+       state: present
+   - name: Run cyberxsecurity/dvwa
+     docker_container:
+       name: dvwa
+       image: cyberxsecurity/dvwa
+       state: started
+       restart: yes
+       restart_policy: always
+       ports:
+        - "80:80"
+       state: present
+   - name: systemd start docker service
+     systemd:
+       name: docker
+       daemon_reload: yes
+       enabled: yes
+This playbook implements the following tasks:
+
+Installing Docker
+Configuring Containers
+Downloading Images
+Playbook for ELK Installation and Configuration:
+---
+- name: Configure Elk VM with Docker
+  hosts: elkservers
+  remote_user: elk
+  become: true
+  tasks:
+    - name: Install docker.io
+      apt:
+        update_cache: yes
+        name: docker.io
+        state: present
+    - name: Install pip3
+      apt:
+        force_apt_get: yes
+        name: python3-pip
+        state: present
+
+    - name: Install Docker python module
+      pip:
+        name: docker
+        state: present
+
+    - name: Increase virtual memory
+      command: sysctl -w vm.max_map_count=262144
+
+    - name: Use more memory
+      sysctl:
+        name: vm.max_map_count
+        value: "262144"
+        state: present
+        reload: yes
+
+    - name: download and launch a docker elk container
+      docker_container:
+        name: elk
+        image: sebp/elk:761
+        state: started
+        restart_policy: always
+        published_ports:
+          - 5601:5601
+          - 9200:9200
+          - 5044:5044
+          - This playbook implements the following tasks:
+          - Installing Docker
+Configuring Containers
+Increasing Virtual Memory
+Downloading the Proper Images
+Target Machines & Beats
+This ELK server is configured to monitor the following machines:
+
+Web-1: 10.0.0.6
+
+Web-2: 10.0.0.7
+
+Have installed FileBeat and MetricBeat on these machines.
+
+Playbook for Installing FileBeat:
+---
+ - name: Install + Launch Filebeat
+   hosts: webservers
+   become: yes
+   tasks:
+   - name: Download filebeat deb
+     command: curl -L -O https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-7.6.1-amd64.deb
+
+   - name: Install filebeat deb
+     command: dpkg -i filebeat-7.6.1-amd64.deb
+
+   - name: drop in filebeat.yml
+     copy:
+       src: /etc/ansible/files/filebeat-config.yml
+       dest: /etc/filebeat/filebeat.yml
+
+   - name: enable and configure system module
+     command: filebeat modules enable system
+
+   - name: setup filebeat
+     command: filebeat setup
+
+   - name: start filebeat service
+     command: service filebeat start
+
+   - name: enable service filebeat on boot
+     systemd:
+       name: filebeat
+       enabled: yes
+       Playbook for Installing MetricBeat:
+       ---
+- name: Install metric beat
+  hosts: webservers
+  become: true
+  tasks:
+  - name: Download metricbeat
+    command: curl -L -O https://artifacts.elastic.co/downloads/beats/metricbeat/metricbeat-7.6.1-amd64.deb
+
+  - name: install metricbeat
+    command: dpkg -i metricbeat-7.6.1-amd64.deb
+
+  - name: drop in metricbeat config
+    copy:
+      src: /etc/ansible/files/metricbeat-config.yml
+      dest: /etc/metricbeat/metricbeat.yml
+
+  - name: enable and configure docker module for metric beat
+    command: metricbeat modules enable docker
+
+  - name: setup metric beat
+    command: metricbeat setup
+
+  - name: start metric beat
+    command: service metricbeat start
+    These Beats allow us to collect the following information from each machine:
+    Filebeat detects changes to the filesystem and collects Apache logs.
+Metricbeat detecs changes in system metrics, such as CPU usage. It can be used to detect sudo escalations, and CPU or RAM statistics.
+Packetbeat (Not Installed) collects packets that pass through the network interface card, similar to of Wireshark. It can be utilized to capture and generate a trace of all activity that takes place within the network.
+Using the Playbook
+In order to use the playbook, you will need to have an Ansible control node already configured. Assuming you have such a control node provisioned:
+SSH into the control node and follow the steps below:
+Copy the playbooks to the Ansible Control Node.
+
+Run the playbook with the command ansible-playbook [playbook-name].yml elk and navigate to /etc/ansible/files to check that the installation worked as expected.
+
+Use the curl command to add the config file: curl https://gist.githubusercontent.com/slape/5cc350109583af6cbe577bbcc0710c93/raw/eca603b72586fbe148c11f9c87bf96a63cb25760/Filebeat > /etc/ansible/files/filebeat-config.yml
+
+Update the filebeat-config.yml file to include the ELK server private IP in lines 1106 and 1806.
+
+Run the filebeat-playbook.yml playbook, and navigate to the kibana page at [ELK public IP]/app/kibana to check the installation.
